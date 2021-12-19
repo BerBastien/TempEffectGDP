@@ -1,5 +1,5 @@
 # # Persistent Effect of Temperature on GDP Identified from Lower Frequency Temperature Variability
-# # Bastien-Olvera, B. A. and Moore, F. C.
+# # Bastien-Olvera, B. A.; Granella, F. and Moore, F. C.
 
 # ## Index
 #     # 1. Setup
@@ -307,41 +307,71 @@
                     a=a+geom_hline(yintercept=0,lwd=1.5,lty=3)
                     a=a+labs(x="Filters (minimum periodicity)",y="Estimated Growth Impact\n(% per Degree)",col="Impact Model")
                     a=a+scale_color_manual(values=c("#d3818c","#7375a4")) + 
-                    ggtitle("Impacts estimation using low-pass filters") #+ ylim(-10,5)
+                    ggtitle("") #+ ylim(-10,5)
                     a
                     
-                    #ggsave("Fig2.png",dpi=600)
+                    ggsave("Fig2.png",dpi=600)
                     
     ## 2.3. Perform MAIN simulation - WITH DRIFT ADJUSTMENT (end)
 
     ## 2.4. Additional simulations and figures (Used for Response to Reviewers)
         ## 2.4a. Perform simulation - WITH QUADRATIC TERM (start)
+            
+            # file=nc_open("C:/Users/bastien/Box/Long Run GDP Growth/Data/LMR Data/air_MCruns_ensemble_mean_LMRv2.0.nc")
+            # gtemp=ncvar_get(file,"air",start=c(1,1,1,1),count=c(-1,-1,1,-1))
+            # lon <- ncvar_get(file,"lon")
+            # lat <- ncvar_get(file,"lat")
+            # time <- ncvar_get(file,"time")
+            # tunits <- ncatt_get(file,"time","units")
+            # data(world)
+            # geom_iso <- world$geom[world$iso_a2=="US"]
+            # geom_iso <- st_shift_longitude(geom_iso)
+            # geom_iso <- st_cast(geom_iso, "POLYGON")
+            # geom_iso <-as_Spatial(geom_iso)
+            
+            # gtemp <- brick(gtemp, xmn=min(lat), xmx=max(lat), ymn=min(lon), ymx=max(lon), crs=CRS("+proj=longlat +datum=WGS84 +no_defs"))
+            # ustemp_lmr <- rep(NA,1500)
+            # for (i in 1:1500){
+            #    gtemp_year <- raster::subset(gtemp,i)
+            #   #gtemp_year <- rotate(gtemp_year)
+            #  gtemp_year <- t(gtemp_year)
+            # ustemp <- extract(gtemp_year, geom_iso,method='simple')
+            #     ustemp_lmr[i] <- mean(ustemp[[1]])
 
+            # }
+            
+            # print(file)
+            # ustemp_lmr_orig <- ustemp_lmr
+            # x <- seq(length(ustemp_lmr_orig))
+            # ustemp_lmr=lm(ustemp_lmr_orig~x)$residuals
+            # p=periodogram(ustemp_lmr)
             time=350 #or 350 years
             basegr=0.01 #2% per year baseline growth rate
             start=100
             baseline=rep(basegr,time)
-            coef=-0.05 #effect size - change in growth per degree warming()
-            coef2=-0.05
+            coef=0.0127#effect size - change in growth per degree warming()
+            coef2=-0.0005
             growthsd=0.005 #standard deviation of growth variability unexplained by temperature
             periods <- c(0,3,5,10,15)
-            nsims=500
+            nsims=200
             sims=array(dim=c(nsims,length(periods),2))
             for(i in 1:nsims){
-                randomtemp=Re(randomts(gtemp))[1:time]
-                #randomtemp=Re(randomts(ustemp_lmr))[1:time]
+                #randomtemp=Re(randomts(gtemp))[1:time]+25
+                #randomtemp=Re(randomts(ustemp_lmr))[1:time]+25
+                randomtemp = rnorm(time,mean=25,sd=0.5)
                 randomgrowth_g=basegr #growth impact model
                 randomgrowth_l=basegr #levels impact model
                 for(j in 2:time){
                 #quadratic
-                randomgrowth_g=c(randomgrowth_g, basegr+(randomtemp[j]*coef)+(coef2*randomtemp[j]^2)+rnorm(1,mean=0,sd=growthsd))
-                randomgrowth_l=c(randomgrowth_l, basegr+(randomtemp[j]-randomtemp[j-1])*coef+coef2*(randomtemp[j]^2-randomtemp[j-1]^2)+rnorm(1,mean=0,sd=growthsd))
+                randomgrowth_g=c(randomgrowth_g, basegr+((randomtemp[j])*coef)+(coef2*(randomtemp[j])^2)+rnorm(1,mean=0,sd=growthsd))
+                randomgrowth_l=c(randomgrowth_l, basegr+((randomtemp[j])-randomtemp[j-1])*coef+coef2*((randomtemp[j])^2-(randomtemp[j-1])^2)+rnorm(1,mean=0,sd=growthsd))
                 #linear
                 #randomgrowth_g=c(randomgrowth_g, basegr+(randomtemp[j]*coef)+rnorm(1,mean=0,sd=growthsd))
                 #randomgrowth_l=c(randomgrowth_l, basegr+(randomtemp[j]-randomtemp[j-1])*coef+rnorm(1,mean=0,sd=growthsd))
                 }
                 dataset=data.frame(years=1:time,temp=randomtemp,g=randomgrowth_g,l=randomgrowth_l)
                 dataset$templag =c(NA,dataset$temp[1:(dim(dataset)[1]-1)])
+                dataset <- dataset[-c(1),]
                 for(k in 1:length(periods)){
                 mod_g=lm(g~temp+templag,data=dataset)$coef[2]
                 mod_l=lm(l~temp+templag,data=dataset)$coef[2]
@@ -376,6 +406,7 @@
                     coefT <- "temp"
                     start1 <- which(names(coef(model))==coefT)
                     end1 <- which(names(coef(model))==paste("I(",coefT,"^2)",sep=""))
+                    
                     sigma = Sigma[c(1:end1),c(1:end1)]
                     beta.hat <- coef(model)[c(1:end1)]
                     x <- seq(from=min(dataset$temp),to=max(dataset$temp), length=length(dataset$temp))
@@ -417,8 +448,8 @@
                 #Unfiltered Growth (end)
                 
                 #Unfiltered levels (start)
-                    linreg <- lm(l~temp+templag,data=dataset)
-                    nonlinreg <- lm(l~temp+I(temp^2)+templag,data=dataset)
+                    linreg <- lm(l~temp,data=dataset)
+                    nonlinreg <- lm(l~temp+I(temp^2),data=dataset)
                     summary(linreg)            
                     summary(nonlinreg)
 
@@ -442,7 +473,7 @@
                     dataset$x <- xmat[,2]
 
                     model <- linreg
-                    sigma <- vcov(model)
+                    Sigma <- vcov(model)
                     start1 <- which(names(coef(model))==coefT)
                     end1 <- which(names(coef(model))==coefT)
                     sigma = Sigma[c(1:end1),c(1:end1)]
@@ -462,7 +493,7 @@
                     u_l <- ggplot(data=dataset, aes(x=temp,y=l))+
                     geom_point(alpha=0.5)+
                     geom_line(aes(x=x,y=gestimated),col=cols[1])+
-                    geom_ribbon(aes(ymin=ci1,ymax=ci2,x=x),alpha=0.2,fill=cols[1])+
+                    geom_ribbon(aes(ymin=ci12,ymax=ci22,x=x),alpha=0.2,fill=cols[1])+
                     geom_line(aes(x=x,y=gestimated2),col=cols[2])+
                     geom_ribbon(aes(ymin=ci12,ymax=ci22,x=x),alpha=0.2,fill=cols[2])+
                     xlab("Temperature change")+
@@ -522,8 +553,8 @@
                 #15y-filtered Growth (end)
                 
                 #15y-filtered levels (start)
-                    linreg <- lm(levels~temp+templag,data=filt)
-                    nonlinreg <- lm(levels~temp+I(temp^2)+templag,data=filt)
+                    linreg <- lm(levels~temp,data=filt)
+                    nonlinreg <- lm(levels~temp+I(temp^2),data=filt)
                     summary(linreg)            
                     summary(nonlinreg)
 
@@ -547,7 +578,7 @@
                     filt$x <- xmat[,2]
 
                     model <- linreg
-                    sigma <- vcov(model)
+                    Sigma <- vcov(model)
                     start1 <- which(names(coef(model))==coefT)
                     end1 <- which(names(coef(model))==coefT)
                     sigma = Sigma[c(1:end1),c(1:end1)]
@@ -715,6 +746,221 @@
                 
                 ggarrange(b,a,nrow=2,ncol=1)
         ## 2.4b. Perform simulation - Combination Gammas and Betas (end)
+
+        ## 2.4c. Simulation comparing low-pass filter with distributed lags
+            time=60
+            basegr=0.01 #1% per year baseline growth rate
+            #basegr=0.025 #2.5% USA per year baseline growth rate
+            
+            start=100
+            baseline=rep(basegr,time)
+            coef=-0.05 #effect size - change in growth per degree warming()
+            growthsd=0.005 #standard deviation of growth variability unexplained by temperature
+            #growthsd=0.01 #USA standard deviation of growth variability unexplained by temperature
+            periods <- c(0,3,5,10,15)
+            arglagbothlist <- list(list(knots=logknots(periods[k],2)),
+                list(fun="poly",degree = 4),
+                list(fun="strata",breaks = 4),
+                list(fun="ns",df = 4),
+                list(fun="bs",df = 4))
+            #nsims=176
+            nsims=10000
+            sims=array(dim=c(nsims,length(periods),2))
+            sims_lp=array(dim=c(nsims,length(periods),2))
+            sims_lp_se=array(dim=c(nsims,length(periods),2))
+            sims_se=array(dim=c(nsims,length(periods),2))
+            sims_dlnm=array(dim=c(nsims,length(periods),2))
+            sims_dlnm_se=array(dim=c(nsims,length(periods),2))
+            for(i in 1:nsims){
+                randomtemp=Re(randomts(gtemp))[1:time]
+                randomgrowth_g=basegr #growth impact model
+                randomgrowth_l=basegr #levels impact model
+                for(j in 6:time){
+                randomgrowth_g=c(randomgrowth_g, basegr+(randomtemp[j]*coef)+rnorm(1,mean=0,sd=growthsd))
+                randomgrowth_l=c(randomgrowth_l, basegr+(randomtemp[j]-randomtemp[j-1])*coef+rnorm(1,mean=0,sd=growthsd))
+                #randomgrowth_l=c(randomgrowth_l, basegr+(randomtemp[j]-0.25*randomtemp[j-1]-0.25*randomtemp[j-2]-
+                #  0.25*randomtemp[j-3]-0.25*randomtemp[j-4]-0.25*randomtemp[j-5])*coef+rnorm(1,mean=0,sd=growthsd))
+                }
+                dataset=data.frame(years=1:(time-5),temp=randomtemp[6:(time)],
+                g=randomgrowth_g[2:(time-4)],l=randomgrowth_l[2:(time-4)])
+                #dataset=data.frame(years=1:time,temp=randomtemp,g=randomgrowth_g,l=randomgrowth_l)
+                dataset$templag =c(NA,dataset$temp[1:(dim(dataset)[1]-1)])
+                for(k in 1:length(periods)){
+                    mod_g=lm(g~temp+templag,data=dataset)$coef[2]
+                    mod_l=lm(l~temp+templag,data=dataset)$coef[2]
+
+                if (k==1){
+                        m_g <- lm(g~temp+templag,data=dataset)
+                        m_l <- lm(l~temp+templag,data=dataset)
+                        mod_g <- m_g$coefficients[2]
+                        mod_l <- m_l$coefficients[2]
+                        sims[i,k,]=c(mod_g,mod_l)
+                        se_l <- summary(m_l)$coefficients[2,2]
+                        se_g <- summary(m_g)$coefficients[2,2]
+                        sims_se[i,k,]=c(se_g,se_l)
+                        sims_lp_se[i,k,]=c(se_g,se_l)
+                        sims_lp[i,k,]=c(mod_g,mod_l)
+
+                        sims_dlnm[i,k,] <- c(mod_g,mod_l)
+                        sims_dlnm_se[i,k,]=c(se_g,se_l)
+
+                    }else{
+                        tempts <- pass.filt(randomtemp[6:(time)], W=periods[k], type="low", method="Butterworth")
+                        ratio <- median(randomtemp[6:(time)]/tempts)
+                        growth <- randomgrowth_g[2:(time-4)]#[6:time]
+                        level <- randomgrowth_l[2:(time-4)]#[6:time]
+                        filt <- data.frame(temp = unclass(tempts), growth = unclass(growth),
+                            level = unclass(level))
+                        filt$templag=c(NA,filt$temp[1:(dim(filt)[1]-1)])
+                        names(filt) <- c("temp","growth","levels","templag")
+                        mod_gfilt=lm(growth~temp,data=filt)
+                        mod_lfilt=lm(levels~temp,data=filt)
+                        sims_lp[i,k,]=c(mod_gfilt$coef[2]/ratio,mod_lfilt$coef[2]/ratio)
+                        se_l <- summary(mod_lfilt)$coefficients[2,2]
+                        se_g <- summary(mod_gfilt)$coefficients[2,2]
+                        sims_lp_se[i,k,]=c(se_g,se_l)
+                        
+                        num_lags <- c(0,periods[k])
+                        arglagboth <- list(knots=logknots(periods[k],2))
+                        cbtemp <- crossbasis(randomtemp[6:(time)],lag=num_lags,argvar=list(fun="poly",degree = 1),arglag=arglagboth)
+                        model_g <-  felm((randomgrowth_g[2:(time-4)]) ~ cbtemp)
+                        dynlag_g <-  crosspred(cbtemp, model_g,from=-1,to=1,by=1,cumul=TRUE, cen = 0)
+                        model_l <-  felm((randomgrowth_l[2:(time-4)]) ~ cbtemp)
+                        dynlag_l <-  crosspred(cbtemp, model_l,from=-1,to=1,by=1,cumul=TRUE, cen = 0)
+                        sims_dlnm[i,k,] <- c(dynlag_g$allfit[2],dynlag_l$allfit[2])
+                        sims_dlnm_se[i,k,]=c(dynlag_g$allse[2],dynlag_l$allse[2])
+
+                        if (k>1){
+                            dataset$templag =c(NA,dataset$temp[1:(dim(dataset)[1]-1)])
+                            dataset$templag2 =c(NA,dataset$templag[1:(dim(dataset)[1]-1)])
+                            dataset$templag3 =c(NA,dataset$templag2[1:(dim(dataset)[1]-1)])
+                            m_g <- lm(g~temp+templag+templag2,data=dataset)
+                            m_l <- lm(l~temp+templag+templag2,data=dataset)
+                            mod_g <- sum(m_g$coefficients[2:length(m_g$coefficients)])
+                            mod_l <- sum(m_l$coefficients[2:length(m_l$coefficients)])
+                            sims[i,k,]=c(mod_g,mod_l)
+                            if (k>2) {
+                                dataset$templag4 =c(NA,dataset$templag3[1:(dim(dataset)[1]-1)])
+                                dataset$templag5 =c(NA,dataset$templag4[1:(dim(dataset)[1]-1)])
+                                m_g <- lm(g~temp+templag+templag2+templag3+templag4,data=dataset)
+                                m_l <- lm(l~temp+templag+templag2+templag3+templag4,data=dataset)
+                                mod_g <- sum(m_g$coefficients[2:length(m_g$coefficients)])
+                                mod_l <- sum(m_l$coefficients[2:length(m_l$coefficients)])
+                                if (k>3){
+                                    dataset$templag6 =c(NA,dataset$templag5[1:(dim(dataset)[1]-1)])
+                                    dataset$templag7 =c(NA,dataset$templag6[1:(dim(dataset)[1]-1)])
+                                    dataset$templag8 =c(NA,dataset$templag7[1:(dim(dataset)[1]-1)])
+                                    dataset$templag9 =c(NA,dataset$templag8[1:(dim(dataset)[1]-1)])
+                                    dataset$templag10 =c(NA,dataset$templag9[1:(dim(dataset)[1]-1)])
+                                    m_g <- lm(g~temp+templag+templag2+templag3+templag4+templag5+templag6+templag7+templag8+templag9,data=dataset)
+                                    m_l <- lm(l~temp+templag+templag2+templag3+templag4+templag5+templag6+templag7+templag8+templag9,data=dataset)
+
+                                    if (k>4){
+                                        dataset$templag11 =c(NA,dataset$templag10[1:(dim(dataset)[1]-1)])
+                                        dataset$templag12 =c(NA,dataset$templag11[1:(dim(dataset)[1]-1)])
+                                        dataset$templag13 =c(NA,dataset$templag12[1:(dim(dataset)[1]-1)])
+                                        dataset$templag14 =c(NA,dataset$templag13[1:(dim(dataset)[1]-1)])
+                                        dataset$templag15 =c(NA,dataset$templag14[1:(dim(dataset)[1]-1)])
+                                        m_g <- lm(g~temp+templag+templag2+templag3+templag4+templag5+templag6+templag7+templag8+templag9+templag10+templag11+templag12+templag13+templag14,data=dataset)
+                                        m_l <- lm(l~temp+templag+templag2+templag3+templag4+templag5+templag6+templag7+templag8+templag9+templag10+templag11+templag12+templag13+templag14,data=dataset)
+                                    }
+                                }
+                                
+                            }
+                            
+                            
+
+
+                        }
+                        mod_g <- sum(m_g$coefficients[2:length(m_g$coefficients)])
+                        mod_l <- sum(m_l$coefficients[2:length(m_l$coefficients)])
+                        sigma <- vcov(m_l)
+                        a <- rep(1,length(m_l$coefficients))
+                        a[1] <- 0
+                        se_sum_l <- c(sqrt(t(a) %*% sigma %*% a))
+                        sigma <- vcov(m_g)
+                        se_sum_g <- c(sqrt(t(a) %*% sigma %*% a))
+                        sims_se[i,k,]=c(se_sum_g,se_sum_l)
+                        sims[i,k,]=c(mod_g,mod_l)
+                }
+                
+
+                }
+                if(i%%50==0) print(i)
+            }
+
+            ## Plotting Figure 2  - Simulation exercise (start)
+            
+            
+            simsfiltmean=apply(sims_dlnm,MARGIN=c(2,3),FUN=mean)
+            colnames(simsfiltmean)=c("Growth","Level");rownames(simsfiltmean)=periods
+            simsfiltmean_se=apply(sims_dlnm_se,MARGIN=c(2,3),FUN=mean)
+            colnames(simsfiltmean_se)=c("Growth","Level");rownames(simsfiltmean_se)=periods
+            simsfiltdat=cbind(melt(simsfiltmean),melt(simsfiltmean_se)[,3])
+            colnames(simsfiltdat)=c("periodsregationPeriod","ImpactType","MeanEffect","SDEffect")
+            theme_set(theme_bw(base_size = 20))
+            
+            simsfiltdat$periodsregationPeriod <- c("No lags", "3 years", "5 years", "10 years", "15 years","No lags", "3 years", "5 years", "10 years", "15 years")
+            simsfiltdat$periodsregationPeriod <- factor(simsfiltdat$periodsregationPeriod,
+                levels = c("No lags", "3 years", "5 years", "10 years", "15 years"))
+            glimpse(simsfiltdat)
+            
+            
+            a=ggplot(simsfiltdat,aes(x=factor(periodsregationPeriod),y=MeanEffect*100,col=ImpactType,group=ImpactType))+geom_line(lwd=1.25)
+            a=a+geom_point(size=4)+geom_errorbar(aes(ymin=(MeanEffect-1.96*SDEffect)*100,ymax=(MeanEffect+1.96*SDEffect)*100),width=0.1,lwd=1.25)
+            a=a+geom_hline(yintercept=0,lwd=1.5,lty=3)
+            a=a+labs(x="Filters",y="Estimated Growth Impact\n(% per Degree)",col="Impact Model")
+            a=a+scale_color_manual(values=c("#d3818c","#7375a4")) + ggtitle("Distributed lag non-linear model") +  ylim(-20,15)
+            c <- a
+            
+            simslagmean=apply(sims,MARGIN=c(2,3),FUN=mean)
+            colnames(simslagmean)=c("Growth","Level");rownames(simslagmean)=periods
+            simslagmean_se=apply(sims_se,MARGIN=c(2,3),FUN=mean)
+            colnames(simslagmean_se)=c("Growth","Level");rownames(simslagmean_se)=periods
+            simslagdat=cbind(melt(simslagmean),melt(simslagmean_se)[,3])
+            colnames(simslagdat)=c("periodsregationPeriod","ImpactType","MeanEffect","SDEffect")
+            theme_set(theme_bw(base_size = 20))
+            
+            simslagdat$periodsregationPeriod <- c("Contemporaneous", "3 years", "5 years", "10 years", "15 years","Contemporaneous", "3 years", "5 years", "10 years", "15 years")
+            simslagdat$periodsregationPeriod <- factor(simslagdat$periodsregationPeriod,
+                levels = c("Contemporaneous", "3 years", "5 years", "10 years", "15 years"))
+            glimpse(simslagdat)
+            
+            
+            a=ggplot(simslagdat,aes(x=factor(periodsregationPeriod),y=MeanEffect*100,col=ImpactType,group=ImpactType))+geom_line(lwd=1.25)
+            a=a+geom_point(size=4)+geom_errorbar(aes(ymin=(MeanEffect-1.96*SDEffect)*100,ymax=(MeanEffect+1.96*SDEffect)*100),width=0.1,lwd=1.25)
+            a=a+geom_hline(yintercept=0,lwd=1.5,lty=3)
+            a=a+labs(x="Number of lags",y="Estimated Growth Impact\n(% per Degree)",col="Impact Model")
+            a=a+scale_color_manual(values=c("#d3818c","#7375a4")) + ggtitle("Lagged temperatures") + ylim(-20,15)
+            b <- a
+
+
+
+            simsfiltmean=apply(sims_lp,MARGIN=c(2,3),FUN=mean)
+            colnames(simsfiltmean)=c("Growth","Level");rownames(simsfiltmean)=periods
+            simsfiltmean_se=apply(sims_lp_se,MARGIN=c(2,3),FUN=mean)
+            colnames(simsfiltmean_se)=c("Growth","Level");rownames(simsfiltmean_se)=periods
+            simsfiltdat=cbind(melt(simsfiltmean),melt(simsfiltmean_se)[,3])
+            colnames(simsfiltdat)=c("periodsregationPeriod","ImpactType","MeanEffect","SDEffect")
+            theme_set(theme_bw(base_size = 20))
+            
+            simsfiltdat$periodsregationPeriod <- c("Unfiltered", "3 years", "5 years", "10 years", "15 years","Unfiltered", "3 years", "5 years", "10 years", "15 years")
+            simsfiltdat$periodsregationPeriod <- factor(simsfiltdat$periodsregationPeriod,
+                levels = c("Unfiltered", "3 years", "5 years", "10 years", "15 years"))
+            glimpse(simsfiltdat)
+            
+            
+            a=ggplot(simsfiltdat,aes(x=factor(periodsregationPeriod),y=MeanEffect*100,col=ImpactType,group=ImpactType))+geom_line(lwd=1.25)
+            a=a+geom_point(size=4)+geom_errorbar(aes(ymin=(MeanEffect-1.96*SDEffect)*100,ymax=(MeanEffect+1.96*SDEffect)*100),width=0.1,lwd=1.25)
+            a=a+geom_hline(yintercept=0,lwd=1.5,lty=3)
+            a=a+labs(x="Filters",y="Estimated Growth Impact\n(% per Degree)",col="Impact Model")
+            a=a+scale_color_manual(values=c("#d3818c","#7375a4")) + ggtitle("Low-pass filter") +  ylim(-20,15)
+            a
+
+            ggarrange(a,b,c, common.legend=TRUE,ncol=3,nrow=1)
+            #ggsave("Filters_Lags_DLNM.png",dpi=600)
+        ## 2.4c. Simulation comparing low-pass filter with distributed lags
+        
 
     ## 2.4. Additional simulations and figures (Used for Response to Reviewers)
 
@@ -951,52 +1197,6 @@
         #Is it autocorrelated?
     ## 3.1. Country-level regressions (end)
         
-    ## 3.2 Panel Regression (start)
-        
-        coefT <- "temp"
-        coefP <- "preci"
-        panel_data$temp <- panel_data$temp + panel_data$meant
-        panel_data$preci <- panel_data$preci + panel_data$meanp
-        
-        panel_results <- data.frame(temp=double(),dgdt=double(),ci1=double(),ci2=double(),filter=double())
-        
-        for(period in periods){
-        p1 <- panel_data[which(panel_data$climdata=="UDel" & panel_data$econdata=="wb"  & panel_data$filter==toString(period)), ] #take only unfiltered data
-        felm_panel1 <- felm(growth_wdi ~ temp+I(temp^2)+preci+I(preci^2)+countrycode:years+countrycode:I(years^2)|countrycode+years|0|countrycode, data =p1)
-            #felm_panel1 <- felm(growth ~ temp+I(temp^2)+preci+I(preci^2)|countrycode+years|0|countrycode, data =p1)
-            assign(paste("felm_panel",toString(period),sep=""),felm_panel1)
-        # Getting marginal effect of an additional degree (start)
-            #summary(felm_panel1)
-            model <- felm_panel1
-            Sigma <- vcov(model)
-            start1 <- which(names(coef(model))==coefT)
-            end1 <- which(names(coef(model))==paste("I(",coefT,"^2)",sep=""))
-            sigma = Sigma[c(start1,end1),c(start1,end1)]
-            beta.hat <- coef(model)[c(start1,end1)]
-            x <- seq(from=min(p1$temp),to=max(p1$temp))
-            xmat <- cbind(1,2*x)
-            dgdt <- colSums(beta.hat*t(xmat)) 
-            ci1 <- dgdt + 1.96*sqrt(diag((xmat %*% sigma) %*% t(xmat)))
-            ci2 <- dgdt- 1.96*sqrt(diag((xmat %*% sigma) %*% t(xmat)))
-            
-             panel_results <-  rbind(panel_results,data.frame(temp=x,dgdt=dgdt,ci1=ci1,ci2=ci2,filter=rep(period,length(x))))
-
-            
-        }
-            #stargazer(felm_panel0,felm_panel3,felm_panel5,felm_panel10,felm_panel15,type="html", out="felm_panel.html")
-            stargazer(felm_panel0,felm_panel3,felm_panel5,felm_panel10,felm_panel15,type="text")
-
-            ggplot(panel_results,aes(x=temp,y=dgdt,ymin=ci2,ymax=ci1,fill=factor(filter)))+geom_line(aes(color=factor(filter)))+
-            scale_fill_discrete(name="Filters")+scale_color_discrete(name="Filters")+
-            theme_bw()+xlab("Temperature (C)") + ylab("Change in Growth")+
-            geom_hline(yintercept=0, linetype="dashed", color = "black")+
-            geom_ribbon(alpha=0.3)+facet_wrap(~filter)
-            #ggsave("Panel_reg_marginal.png",dpi=600)
-        # Getting marginal effect of an additional degree (start)
-        
-
-    ## 3.2 Panel Regression (end)
-
     ## 3.3. categorizing - Plotting Figure 3  (start)
 
         # Categorizing statistically different estimates (start)
@@ -1014,6 +1214,7 @@
             fmod_fft$lowsignificant <- 0
             fmod_fft$unfilteredsignificant <- 0
             fmod_fft$signlofreq <- 0
+            fmod_fft$signunfilt <- 0
                             
             uncertain <- c(which(fmod_fft$high95>0 & fmod_fft$low95 <0))
             `%notin%` <- Negate(`%in%`)
@@ -1033,6 +1234,7 @@
                         lastfreq <- 2
                     }else{next}
                 if(fmod_fft$Estimate[lastfreq+5*(i-1)] >0){fmod_fft$signlofreq[(1+5*(i-1)):(5+5*(i-1))]=1}
+                if(fmod_fft$Estimate[1+5*(i-1)] >0){fmod_fft$signunfilt[(1+5*(i-1)):(5+5*(i-1))]=1}
                 m <- fmod_fft$Estimate[1+5*(i-1)] * fmod_fft$Estimate[lastfreq+5*(i-1)]
                 if (is.na(m)){next}
                 if(m>0 ){
@@ -1044,6 +1246,7 @@
                 converging <- 0
                 intensifying <- 0
                 intensifying_stat <- 0
+                gray_area <- 0
                 for (i in 1:numcountries){
                     if(!is.na(fmod_fft$Estimate[5+5*(i-1)])){
                             lastfreq <- 5
@@ -1061,10 +1264,13 @@
                     conf95 <-  (var^0.5)*1.65 #one-tail  95%
                     
                     if(abs(fmod_fft$Estimate[lastfreq+5*(i-1)]) > abs(fmod_fft$Estimate[1+5*(i-1)])){
-                        intensifying <- c(intensifying,(1+5*(i-1)):(5+5*(i-1))) 
+                         
+                        if(fmod_fft$sign[2+5*(i-1)]==0){gray_area <- c(gray_area,(1+5*(i-1)):(5+5*(i-1))) }else{
+                                intensifying <- c(intensifying,(1+5*(i-1)):(5+5*(i-1)))
+                        
                         if(theta+conf95 < 0 ){
                             intensifying_stat <- c(intensifying_stat,(1+5*(i-1)):(5+5*(i-1))) 
-                        }
+                        }}
                     }
                     
                     if(abs(fmod_fft$Estimate[lastfreq+5*(i-1)]) <= abs(fmod_fft$Estimate[1+5*(i-1)])){
@@ -1094,6 +1300,8 @@
                 fmod_fft$category[intensifying] <- "intensifying"
                 fmod_fft$category[converging_stat] <- "converging_stat"
                 fmod_fft$category[intensifying_stat] <- "intensifying_stat"
+                fmod_fft$category[gray_area] <- "gray_area"
+
                 table(fmod_fft$category)/5
                 
                 fmod_fft$Category <- "Undefined"
@@ -1107,6 +1315,11 @@
                 table(fmod_fft$CoeffDifferents)/5
                 
                 table(fmod_fft$lowsignificant)/5
+                table(fmod_fft$unfilteredsignificant)/5
+
+                
+                table(fmod_fft$category[which(fmod_fft$unfilteredsignificant==1)])/5
+                table(fmod_fft$category[which(fmod_fft$lowsignificant==1)])/5
 
                 fmod_fft_na<-fmod_fft[fmod_fft$category=="Undefined" | 
                     fmod_fft$countrycode %notin% fmod_fft$countrycode[which(fmod_fft$Estimate<quantile(fmod_fft$Estimate, na.rm=TRUE,0.01))] |
@@ -1116,9 +1329,7 @@
                 world <- ne_countries(scale = "medium", returnclass = "sf")
 
                 
-                fmod_fft<- fmod_fft[fmod_fft$countrycode %notin% fmod_fft$countrycode[which(fmod_fft$Estimate>quantile(fmod_fft$Estimate, na.rm=TRUE,0.99))],]
-                fmod_fft<- fmod_fft[fmod_fft$countrycode %notin% fmod_fft$countrycode[which(fmod_fft$Estimate<quantile(fmod_fft$Estimate, na.rm=TRUE,0.01))],]
-               
+                
                 fmod_fft$iso_a3 <- fmod_fft$countrycode
                 fmod_fft_map <- merge(world,fmod_fft,by="iso_a3")
                 fmod_fft_na$iso_a3 <- fmod_fft_na$countrycode
@@ -1126,7 +1337,7 @@
                 
 
                 #factor(fmod_fft$category)
-                fmod_fft$category <- factor(fmod_fft$category, levels = c("intensifying_stat", "intensifying", "converging","converging_stat"))
+                fmod_fft$category <- factor(fmod_fft$category, levels = c("intensifying_stat", "intensifying", "converging","converging_stat","gray_area"))
                 df1 <- fmod_fft[which(fmod_fft$econdata=="wb" &fmod_fft$climdata=="UDel" & fmod_fft$filter=="Unfiltered"),]
                 pal1 <- sequential_hcl(7, palette = "Oranges")
                 pal2 <- sequential_hcl(7, palette = "Teal")
@@ -1137,8 +1348,8 @@
                     geom_histogram(data=df1, na.rm= TRUE, mapping = aes(x=lowsignificant, fill=factor(category)), 
                     #stat='count')+ scale_fill_manual(values = c(pal1[1],pal1[3],pal2[3],pal2[1]), 
                     #name="",labels=c("*Intensifying","Intensifying","Converging","*Converging"))+
-                    stat='count')+ scale_fill_manual(values = c(pal1[1],pal1[3],pal2[3]), 
-                    name="",labels=c("*Intensifying","Intensifying","Converging"))+ #No converging statistically significant found
+                    stat='count')+ scale_fill_manual(values = c(pal1[1],pal1[3],pal2[3],"dimgray"), 
+                    name="",labels=c("*Intensifying","Intensifying","Converging","Unclassified"))+ #No converging statistically significant found
                     scale_x_discrete(name="",
                         labels=c(expression(paste("|",theta[f],"| =0",sep="")),
                         expression(paste("|",theta[f],"| >0",sep=""))))+
@@ -1146,20 +1357,22 @@
 
                 df2 <- fmod_fft[which(fmod_fft$econdata=="wb" &fmod_fft$climdata=="UDel" & fmod_fft$filter=="Unfiltered" & fmod_fft$unfilteredsignificant==1),]
                 df2$unfilteredsignificant <- factor(df2$unfilteredsignificant)
-                glimpse(df2)     
                 hist_bu <- ggplot() + theme_bw()+
                     geom_histogram(data=df2, na.rm= TRUE, mapping = aes(x=unfilteredsignificant, fill=factor(category)),stat='count')+ 
                     #scale_fill_manual(values = c(pal1[1],pal1[3],pal2[3],pal2[1]), 
                     #name="",labels=c("*Intensifying","Intensifying","Converging","*Converging"))+
-                    scale_fill_manual(values = c(pal1[1],pal1[3],pal2[3]), 
-                    name="",labels=c("*Intensifying","Intensifying","Converging"))+ #No converging statistically significant found
+                    scale_fill_manual(values = c(pal1[1],pal1[3],pal2[3],"dimgray"), 
+                    name="",labels=c("*Intensifying","Intensifying","Converging","Unclassified"))+ #No converging statistically significant found
                     scale_x_discrete(name="",labels=c(expression(paste("|",theta[U],"| >0",sep=""))))+
                     scale_y_continuous(name="Number of countries") + theme(legend.position="none")
                  
-                 plot_fg <- ggplot(data=fmod_fft,aes(x=filters,y=Estimate*100, group = countrycode,color=factor(category)))+
+                fmod_fft<- fmod_fft[fmod_fft$countrycode %notin% fmod_fft$countrycode[which(abs(fmod_fft$Estimate)>quantile(abs(fmod_fft$Estimate), na.rm=TRUE,0.99))],]
+                #fmod_fft<- fmod_fft[fmod_fft$countrycode %notin% fmod_fft$countrycode[which(fmod_fft$Estimate<quantile(fmod_fft$Estimate, na.rm=TRUE,0.01))],]
+               
+               plot_fg <- ggplot(data=fmod_fft,aes(x=filters,y=Estimate*100, group = countrycode,color=factor(category)))+
                     geom_line()+
-                    scale_colour_manual(name="Categories", values=c(pal1[1],pal1[3],pal2[3],pal2[1]),
-                    labels=c("Converging","Intensifying","Statistically Intensifying","Statistically Converging")) +
+                    scale_colour_manual(name="Categories", values=c(pal1[1],pal1[3],pal2[3],pal2[1],"dimgray"),
+                    labels=c("Converging","Intensifying","Statistically Intensifying","Statistically Converging","Unclassified")) +
                     theme_bw() + xlab("Minimum Periodicity after Filtering")+
                     geom_hline(yintercept=0,lty=2)+
                     #geom_dl(data=fg,aes(label = countrycode), method = list(dl.combine("last.points")), cex = 0.9)+
@@ -1172,66 +1385,76 @@
                     #panel.background = element_blank()) +
                     ggtitle("")
                     plot_fg      
+
+                table(fmod_fft$sign)/5
+                table(fmod_fft$sign)/5
+                table(fmod_fft$category[fmod_fft$sign==1])/5
+                table(fmod_fft$category[fmod_fft$sign==0])/5
+                table(fmod_fft$unfilteredsignificant[fmod_fft$sign==0])/5
                 
-                
-                plot_categoriescolors <- ggplot() + geom_histogram(data=data.frame(x=c("*Intensifying","Intensifying","Converging","*Converging")), na.rm= TRUE, mapping = aes(x=x, fill=factor(x)),stat='count')+ 
-                scale_fill_manual(values = c(pal1[1],pal1[3],pal2[3],pal2[1]),name="",labels=c("*Intensifying","Intensifying","Converging","*Converging"))
+                plot_categoriescolors <- ggplot() + geom_histogram(data=data.frame(x=c("*Intensifying","Intensifying","Converging","*Converging","Unclassified")), na.rm= TRUE, mapping = aes(x=x, fill=factor(x)),stat='count')+ 
+                scale_fill_manual(values = c(pal1[1],pal1[3],pal2[3],pal2[1],"dimgray"),name="",labels=c("*Intensifying","Intensifying","Converging","*Converging","Unclassified"))
                 leg_cat <- get_legend(plot_categoriescolors)                    
                 
                 fig_3 <- ggarrange(plot_fg,ggarrange(hist_bu,leg_cat,hist_bf,ncol=3,nrow=1),ncol=1,nrow=2)    
                 fig_3
+                e_wb <- fmod_fft
                 #ggsave("Figures/Fig3.png",dpi=600)
                 
-                map_categories <- ggplot(data=fmod_fft_map) +
-                            geom_sf(data = fmod_fft_map_na,aes(fill=NA))+
-                            theme_minimal()+
-                            geom_sf(aes(fill = category))+
-                            scale_fill_manual(name = "",
-                                            #labels=c("Converging","Intensifying","*Intensifying"),
-                                            values=c(pal2[3],pal1[3],pal1[1]))+
-                            theme(legend.position="none")+
-                            ggtitle("Behavior of coefficients")
-                    ggarrange(map_categories,leg_cat,ncol=2,nrow=1,widths=c(5,1))
+                # map_categories <- ggplot(data=fmod_fft_map) +
+                #             geom_sf(data = fmod_fft_map_na,aes(fill=NA))+
+                #             theme_minimal()+
+                #             geom_sf(aes(fill = category))+
+                #             scale_fill_manual(name = "",
+                #                             #labels=c("Converging","Intensifying","*Intensifying"),
+                #                             values=c(pal2[3],pal1[3],pal1[1]))+
+                #             theme(legend.position="none")+
+                #             ggtitle("Behavior of coefficients")
+                #     ggarrange(map_categories,leg_cat,ncol=2,nrow=1,widths=c(5,1))
                     
-                    #ggsave("Fig3_map.png",dpi=600)
+                #     #ggsave("Fig3_map.png",dpi=600)
 
-                fmod_fft_map_low <- fmod_fft_map[which(fmod_fft_map$filters=="15 years"),]
-                missingcountries15 <- fmod_fft_map_low$countrycode[is.na(fmod_fft_map_low$Estimate)]
-                fmod_fft_map_10 <- fmod_fft_map[which(fmod_fft_map$filters=="10 years"),]
+                # fmod_fft_map_low <- fmod_fft_map[which(fmod_fft_map$filters=="15 years"),]
+                # missingcountries15 <- fmod_fft_map_low$countrycode[is.na(fmod_fft_map_low$Estimate)]
+                # fmod_fft_map_10 <- fmod_fft_map[which(fmod_fft_map$filters=="10 years"),]
                 
-                fmod_fft_map_low$Estimate[which(fmod_fft_map_low$countrycode %in% missingcountries15)] <- fmod_fft_map_10$Estimate[which(fmod_fft_map_10$countrycode %in% missingcountries15)]
-                ggplot(data = fmod_fft_map_low) +
-                                geom_sf(data=fmod_fft_map_na,fill=NA)+theme_minimal()+
-                                geom_sf(data=fmod_fft_map_low,aes(fill = Estimate*100))+
-                                scale_fill_gradient2(
-                                    name = "Estimated impact \n (% per Degree)",
-                                    low = "red",
-                                    mid = "white",
-                                    high = "#00BFC4",
-                                    midpoint = 0,
-                                    space = "Lab",
-                                    na.value = "gray",
-                                    guide = "colourbar",
-                                    aesthetics = "fill")+
-                                    ggtitle("Growth effects")+
-                                theme(legend.position="bottom")
+                # fmod_fft_map_low$Estimate[which(fmod_fft_map_low$countrycode %in% missingcountries15)] <- fmod_fft_map_10$Estimate[which(fmod_fft_map_10$countrycode %in% missingcountries15)]
+                # ggplot(data = fmod_fft_map_low) +
+                #                 geom_sf(data=fmod_fft_map_na,fill=NA)+theme_minimal()+
+                #                 geom_sf(data=fmod_fft_map_low,aes(fill = Estimate*100))+
+                #                 scale_fill_gradient2(
+                #                     name = "Estimated impact \n (% per Degree)",
+                #                     low = "red",
+                #                     mid = "white",
+                #                     high = "#00BFC4",
+                #                     midpoint = 0,
+                #                     space = "Lab",
+                #                     na.value = "gray",
+                #                     guide = "colourbar",
+                #                     aesthetics = "fill")+
+                #                     ggtitle("Growth effects")+
+                #                 theme(legend.position="bottom")
                     #ggsave("Map_correcteddata.png",dpi=600)
                            
         # Categorizing statistically different estimates (end)
     ## 3.3. categorizing - Plotting Figure 3 (end) 
 
     ## 3.4. FELM abs estimate by filter - Table 1, columns 1 and 2 (start)
-        fmod_fft$absestimate <- abs(fmod_fft$Estimate)
         fmod_fft$continent <- countrycode(sourcevar = fmod_fft$countrycode,
                                 origin = "iso3c",
                                 destination = "continent")
         fmod_fft$invse <- 1/fmod_fft$StandardError
         fmod_fft <- fmod_fft[!is.na(fmod_fft$invse),]
-        felm_1 <- felm(absestimate ~ factor(frequencies)|0|0|continent, data = fmod_fft,weights = fmod_fft$invse)
-        felm_2 <- felm(absestimate ~ factor(frequencies)|0|0|continent, data = fmod_fft)
+        f_unfiltpos <- fmod_fft[fmod_fft$signunfilt==1,]
+        f_unfiltneg <- fmod_fft[fmod_fft$signunfilt==0,]
+        
+        #f_samesign <- f_samesign[f_samesign$signlofreq==1,]
+        felm_1 <- felm(Estimate ~ factor(frequencies)|0|0|continent, data =f_unfiltpos,weights = f_unfiltpos$invse)
+        felm_2 <- felm(Estimate ~ factor(frequencies)|0|0|continent, data =f_unfiltneg,weights = f_unfiltneg$invse)
         
         #stargazer(felm_2,felm_1, type="html", out="felm_1_2.html")
         stargazer(felm_2,felm_1,type="text")
+        #write.csv(fmod_fft,'Growth_Estimates_Filters.csv')
 
         #felm_1_within <- felm(absestimate ~ frequencies|countrycode|0|continent, data = fmod_fft,weights = fmod_fft$invse)
         #felm_2_within <- felm(absestimate ~ frequencies|countrycode|0|continent, data = fmod_fft)
@@ -1282,9 +1505,12 @@
 
             meanestimate <- data.frame(mean = rep(0,15),filter = rep(0,15), weight = rep(0,15), var = rep(0,15))
             frequency <- c("Unfiltered","3 years","5 years","10 years","15 years")
-            #fmod_fft15 <- fmod_fft2[(fmod_fft2$filters=="Unfiltered"),]
+            fmod_fft15 <- fmod_fft2
+            fmod_fft2[fmod_fft2$countrycode=="USA",]
             #fmod_fft15 <- fmod_fft15[!is.na(fmod_fft15$Estimate),]
-            c15 <- levels(factor(fmod_fft2$countrycode))
+            #fmod_fft15 <- fmod_fft15[!is.na(fmod_fft15$SP.POP.TOTL),]
+            #fmod_fft15 <- fmod_fft15[!is.na(fmod_fft15$NY.GDP.MKTP.PP.KD),]
+            c15 <- levels(factor(fmod_fft15$countrycode))
             fmod_fft15 <- fmod_fft2[(fmod_fft2$countrycode %in% c15),]
             weighted.var <- function(x, w, na.rm = FALSE) {
                 if (na.rm) {
@@ -1306,18 +1532,30 @@
 
                 x1 <- fmod_fft15[!is.na(fmod_fft15$SP.POP.TOTL),]
                 x1 <- x1[!is.na(x1$Estimate),]
+                x1 <- x1[x1$lowsignificant==1,]
                 est <- x1$Estimate[x1$filters==frequency[i]]
                 popw <- x1$SP.POP.TOTL[x1$filters==frequency[i]]
-                
+                gdpw <- x1$NY.GDP.MKTP.PP.KD[x1$filters==frequency[i]]
+                countrypop <- x1$countrycode[x1$filters==frequency[i]]
+                hist((est*popw)/sum(popw))
+                datpop <- data.frame(estimate=est,population=popw,country=countrypop)
+                ggplot(datpop,aes(x=estimate,y=population,label=country))+geom_label()
                 meanestimate$mean[2 + ((i-1)*3)] <-sum((est*popw)/sum(popw),na.rm=TRUE)
                 meanestimate$weight[2 + ((i-1)*3)] <- "Population in 2019"
                 meanestimate$var[2 + ((i-1)*3)] <- weighted.var(x=est, w = popw,na.rm=TRUE)
-
+                sum((est*(gdpw/popw))/sum(gdpw/popw,na.rm=TRUE),na.rm=TRUE)
+                datpop <- data.frame(est=est,gdppopw=gdpw/popw,country=countrypop)
+                #ggplot(datpop,aes(x=est,y=gdppopw,label=country))+geom_label()
+                
                 #x1 <- fmod_fft15[!is.na(fmod_fft15$Estimate) & !is.na(fmod_fft15$NY.GDP.PCAP.PP.KD),]
                 x1 <- fmod_fft15[!is.na(fmod_fft15$Estimate) & !is.na(fmod_fft15$NY.GDP.MKTP.PP.KD),]
+                #x1 <- x1[x1$lowsignificant==1,]
                 gdpw <- x1$NY.GDP.MKTP.PP.KD[x1$filters==frequency[i]]
                 #gdpw <- x1$NY.GDP.PCAP.PP.KD[x1$filters==frequency[i]]
                 est <- x1$Estimate[x1$filters==frequency[i]]
+                country <- x1$countrycode[x1$filters==frequency[i]]
+                datpop <- data.frame(est=est,gdpw=gdpw,country=country)
+                
                 meanestimate$mean[3 + ((i-1)*3)] <- sum((est*gdpw)/sum(gdpw),na.rm=TRUE)
                 meanestimate$weight[3 + ((i-1)*3)] <- "GDP, PPP constant 2017 USD"
                 meanestimate$var[3 + ((i-1)*3)]  <- weighted.var(x=x1$Estimate[x1$filters==frequency[i]], w = x1$NY.GDP.MKTP.PP.KD[x1$filters==frequency[i]],na.rm=TRUE)
@@ -1329,91 +1567,93 @@
 
         # Socioeconomic characteristics across categories (start)
             
-            fmod_fft2$catsign <- paste(fmod_fft2$category,fmod_fft2$signlofreq,sep=".")
-            fmod_fft2 <- fmod_fft2[fmod_fft2$category!="other",]
-            fmod_fft2$logGDPpc <- log(fmod_fft2$NY.GDP.PCAP.PP.KD)
-            densityGDP6 <-  ggstatsplot::ggbetweenstats(
-                data = fmod_fft2,
-                x = catsign,
-                y = logGDPpc
-                )
+            # fmod_fft2$catsign <- paste(fmod_fft2$category,fmod_fft2$signlofreq,sep=".")
+            # fmod_fft2 <- fmod_fft2[fmod_fft2$category!="other",]
+            # fmod_fft2$logGDPpc <- log(fmod_fft2$NY.GDP.PCAP.PP.KD)
+            # densityGDP6 <-  ggstatsplot::ggbetweenstats(
+            #     data = fmod_fft2,
+            #     x = catsign,
+            #     y = logGDPpc
+            #     )
 
-            densitymeanT6 <-  ggstatsplot::ggbetweenstats(
-            data = fmod_fft2,
-            x = catsign,
-            y = meanT
-            )
+            # densitymeanT6 <-  ggstatsplot::ggbetweenstats(
+            # data = fmod_fft2,
+            # x = catsign,
+            # y = meanT
+            # )
 
-            densityGDP3 <-  ggstatsplot::ggbetweenstats(
-            data = fmod_fft2,
-            x = category,
-            y = logGDPpc
-            )
+            # densityGDP3 <-  ggstatsplot::ggbetweenstats(
+            # data = fmod_fft2,
+            # x = category,
+            # y = logGDPpc
+            # )
 
-            densitymeanT3 <-  ggstatsplot::ggbetweenstats(
-            data = fmod_fft2,
-            x = category,
-            y = meanT
-            )
+            # densitymeanT3 <-  ggstatsplot::ggbetweenstats(
+            # data = fmod_fft2,
+            # x = category,
+            # y = meanT
+            # )
 
-            ggarrange(densityGDP3,densitymeanT3)
-            ggsave("Category_byTandGDP.png",dpi=600)
+            # ggarrange(densityGDP3,densitymeanT3)
+            # #ggsave("Category_byTandGDP.png",dpi=600)
         
-            cat <- data.frame(T = rep(0,6),minT=rep(0,6),maxT=rep(0,6),G = rep(0,6),minG=rep(0,6),maxG=rep(0,6),categories=c("Constant.negative","Constant.positive","Converging.negative","Converging.positive","Intensifying.negative","Intensifying.positive"))
-            cat$T <- aggregate(fmod_fft2$meanT, list(fmod_fft2$catsign), mean, na.rm=TRUE)[1:6,2]
-            cat$G <- aggregate(fmod_fft2$logGDPpc, list(fmod_fft2$catsign), mean, na.rm=TRUE)[1:6,2]
-            cat$minT <- aggregate(fmod_fft2$meanT, list(fmod_fft2$catsign), min, na.rm=TRUE)[1:6,2]
-            cat$maxT <- aggregate(fmod_fft2$meanT, list(fmod_fft2$catsign),max, na.rm=TRUE)[1:6,2]
-            cat$minG <- aggregate(fmod_fft2$logGDPpc, list(fmod_fft2$catsign), min, na.rm=TRUE)[1:6,2]
-            cat$maxG <- aggregate(fmod_fft2$logGDPpc, list(fmod_fft2$catsign),max, na.rm=TRUE)[1:6,2]
-            cat$category <- c("Constant","Constant","Converging","Converging","Intensifying","Intensifying")
-            cat$signlofreq <- c("Negative","Positive","Negative","Positive","Negative","Positive")
+            # cat <- data.frame(T = rep(0,6),minT=rep(0,6),maxT=rep(0,6),G = rep(0,6),minG=rep(0,6),maxG=rep(0,6),categories=c("Constant.negative","Constant.positive","Converging.negative","Converging.positive","Intensifying.negative","Intensifying.positive"))
+            # cat$T <- aggregate(fmod_fft2$meanT, list(fmod_fft2$catsign), mean, na.rm=TRUE)[1:6,2]
+            # cat$G <- aggregate(fmod_fft2$logGDPpc, list(fmod_fft2$catsign), mean, na.rm=TRUE)[1:6,2]
+            # cat$minT <- aggregate(fmod_fft2$meanT, list(fmod_fft2$catsign), min, na.rm=TRUE)[1:6,2]
+            # cat$maxT <- aggregate(fmod_fft2$meanT, list(fmod_fft2$catsign),max, na.rm=TRUE)[1:6,2]
+            # cat$minG <- aggregate(fmod_fft2$logGDPpc, list(fmod_fft2$catsign), min, na.rm=TRUE)[1:6,2]
+            # cat$maxG <- aggregate(fmod_fft2$logGDPpc, list(fmod_fft2$catsign),max, na.rm=TRUE)[1:6,2]
+            # cat$category <- c("Constant","Constant","Converging","Converging","Intensifying","Intensifying")
+            # cat$signlofreq <- c("Negative","Positive","Negative","Positive","Negative","Positive")
             
-            cat6spread <- ggplot(data=cat, aes(x=T,y=G,xmin=minT,xmax=maxT,ymin=minG,ymax=maxG, shape=category, color = signlofreq,group=categories))+
-            geom_point()+geom_errorbar()+geom_errorbarh()+
-            scale_color_discrete(name="Direction of the effect")+
-            scale_color_brewer(name="Direction of the effect",palette="Dark2")+
-            scale_shape_discrete(name="Category")+
-            labs(x="Country's population-weighted temperature", y="log(GDP per capita)")+theme_bw()
+            # cat6spread <- ggplot(data=cat, aes(x=T,y=G,xmin=minT,xmax=maxT,ymin=minG,ymax=maxG, shape=category, color = signlofreq,group=categories))+
+            # geom_point()+geom_errorbar()+geom_errorbarh()+
+            # scale_color_discrete(name="Direction of the effect")+
+            # scale_color_brewer(name="Direction of the effect",palette="Dark2")+
+            # scale_shape_discrete(name="Category")+
+            # labs(x="Country's population-weighted temperature", y="log(GDP per capita)")+theme_bw()
 
-            cat6datapoints <- ggplot(data=fmod_fft2, aes(x=meanT,y=logGDPpc, shape=category, color = factor(signlofreq)))+
-            geom_point()+
-            scale_color_discrete(name="Direction of the effect")+
-            scale_color_brewer(name="Direction of the effect",palette="Dark2")+
-            scale_shape_discrete(name="Category")+
-            labs(x="Country's population-weighted temperature", y="log(GDP per capita)")+theme_bw()
+            # cat6datapoints <- ggplot(data=fmod_fft2, aes(x=meanT,y=logGDPpc, shape=category, color = factor(signlofreq)))+
+            # geom_point()+
+            # scale_color_discrete(name="Direction of the effect")+
+            # scale_color_brewer(name="Direction of the effect",palette="Dark2")+
+            # scale_shape_discrete(name="Category")+
+            # labs(x="Country's population-weighted temperature", y="log(GDP per capita)")+theme_bw()
 
-            ggarrange(cat6spread,cat6datapoints,ncol=1,common.legend=TRUE)
-            ggsave("SupFig3_cat6.png",dpi=600)
-            cat <- data.frame(T = rep(0,3),minT=rep(0,3),maxT=rep(0,3),G = rep(0,3),minG=rep(0,3),maxG=rep(0,3),category=c("Constant","Converging","Intensifying"))
-            cat$T <- aggregate(fmod_fft2$meanT, list(fmod_fft2$category), mean, na.rm=TRUE)[,2]
-            cat$G <- aggregate(fmod_fft2$logGDPpc, list(fmod_fft2$category), mean, na.rm=TRUE)[,2]
-            cat$minT <- aggregate(fmod_fft2$meanT, list(fmod_fft2$category), min, na.rm=TRUE)[,2]
-            cat$maxT <- aggregate(fmod_fft2$meanT, list(fmod_fft2$category),max, na.rm=TRUE)[,2]
-            cat$minG <- aggregate(fmod_fft2$logGDPpc, list(fmod_fft2$category), min, na.rm=TRUE)[,2]
-            cat$maxG <- aggregate(fmod_fft2$logGDPpc, list(fmod_fft2$category),max, na.rm=TRUE)[,2]
-            cat3spread <- ggplot(data=cat, aes(x=T,y=G,xmin=minT,xmax=maxT,ymin=minG,ymax=maxG,color=category))+
-            geom_point()+geom_errorbar()+geom_errorbarh()+
-            labs(x="Mean Temperature", y="logGDPpc")+theme_bw()
+            # ggarrange(cat6spread,cat6datapoints,ncol=1,common.legend=TRUE)
+            # #ggsave("SupFig3_cat6.png",dpi=600)
+            # cat <- data.frame(T = rep(0,3),minT=rep(0,3),maxT=rep(0,3),G = rep(0,3),minG=rep(0,3),maxG=rep(0,3),category=c("Constant","Converging","Intensifying"))
+            # cat$T <- aggregate(fmod_fft2$meanT, list(fmod_fft2$category), mean, na.rm=TRUE)[,2]
+            # cat$G <- aggregate(fmod_fft2$logGDPpc, list(fmod_fft2$category), mean, na.rm=TRUE)[,2]
+            # cat$minT <- aggregate(fmod_fft2$meanT, list(fmod_fft2$category), min, na.rm=TRUE)[,2]
+            # cat$maxT <- aggregate(fmod_fft2$meanT, list(fmod_fft2$category),max, na.rm=TRUE)[,2]
+            # cat$minG <- aggregate(fmod_fft2$logGDPpc, list(fmod_fft2$category), min, na.rm=TRUE)[,2]
+            # cat$maxG <- aggregate(fmod_fft2$logGDPpc, list(fmod_fft2$category),max, na.rm=TRUE)[,2]
+            # cat3spread <- ggplot(data=cat, aes(x=T,y=G,xmin=minT,xmax=maxT,ymin=minG,ymax=maxG,color=category))+
+            # geom_point()+geom_errorbar()+geom_errorbarh()+
+            # labs(x="Mean Temperature", y="logGDPpc")+theme_bw()
 
-            cat3datapoints <- ggplot(data=fmod_fft2, aes(x=meanT,y=logGDPpc, color=category))+
-            geom_point()+
-            labs(x="Mean Temperature", y="logGDPpc")+theme_bw()
+            # cat3datapoints <- ggplot(data=fmod_fft2, aes(x=meanT,y=logGDPpc, color=category))+
+            # geom_point()+
+            # labs(x="Mean Temperature", y="logGDPpc")+theme_bw()
 
-            ggarrange(densityGDP6,densitymeanT6,cat6spread,cat6datapoints,ncol=1,nrow=4)
-            #ggsave("soecioeconomic_6cat.png",dpi=600)
-            ggarrange(densityGDP3,densitymeanT3,cat3spread,cat3datapoints,ncol=1,nrow=4)
-            #ggsave("soecioeconomic_3cat.png",dpi=600)
-            head(fmod_fft2[fmod_fft2$filters=="Unfiltered",])
-            a1=ggplot(fmod_fft2[fmod_fft2$filters=="Unfiltered",], 
+            # ggarrange(densityGDP6,densitymeanT6,cat6spread,cat6datapoints,ncol=1,nrow=4)
+            # #ggsave("soecioeconomic_6cat.png",dpi=600)
+            # ggarrange(densityGDP3,densitymeanT3,cat3spread,cat3datapoints,ncol=1,nrow=4)
+            # #ggsave("soecioeconomic_3cat.png",dpi=600)
+            # head(fmod_fft2[fmod_fft2$filters=="Unfiltered",])
+            
+            a1=ggplot(fmod_fft2[fmod_fft2$filters=="Unfiltered"& fmod_fft2$unfilteredsignificant==1,], 
             aes(x=meanT,y=Estimate))+geom_point()+
             geom_smooth(method = "lm",
                     color = "#00BFC4", show.legend = FALSE) +  theme_bw()+
                     geom_hline(yintercept=0,lty=2) +
-                    labs(title="Temperature effect Filter = Unfiltered")
+                    labs(title="Temperature effect Filter = Unfiltered") +
+                    xlab("Mean temperature")
             
 
-            b1=ggplot(fmod_fft2[fmod_fft2$filters=="Unfiltered",],aes(x=log(NY.GDP.PCAP.PP.KD),
+            b1=ggplot(fmod_fft2[fmod_fft2$filters=="Unfiltered"& fmod_fft2$unfilteredsignificant==1,],aes(x=log(NY.GDP.PCAP.PP.KD),
             y=Estimate))+geom_point()+
             #geom_errorbar()+
             geom_smooth(method = "lm", 
@@ -1421,15 +1661,18 @@
                     geom_hline(yintercept=0,lty=2) +
                     xlab("log GDP per capita")+
                     labs(title="Temperature effect Filter = Unfiltered")
-            a=ggplot(fmod_fft2[fmod_fft2$filters=="15 years",], 
-            aes(x=meanT,y=Estimate))+geom_point()+
+            
+            a=ggplot(fmod_fft2[fmod_fft2$filters=="15 years" & fmod_fft2$lowsignificant==1,], 
+            aes(x=meanT,y=Estimate))+geom_point()+ 
+            xlab("Mean temperature")+
+            #geom_errorbar(aes(ymin=low95,ymax=high95,width=0.1))+
             geom_smooth(method = "lm",
                     color = "#00BFC4", show.legend = FALSE) +  theme_bw()+
                     geom_hline(yintercept=0,lty=2) +
                     labs(title="Temperature effect Filter = 15 year")
             
 
-            b=ggplot(fmod_fft2[fmod_fft2$filters=="15 years",],aes(x=log(NY.GDP.PCAP.PP.KD),
+            b=ggplot(fmod_fft2[fmod_fft2$filters=="15 years"& fmod_fft2$lowsignificant==1,],aes(x=log(NY.GDP.PCAP.PP.KD),
             y=Estimate))+geom_point()+
             #geom_errorbar()+
             geom_smooth(method = "lm", 
@@ -1439,7 +1682,7 @@
                     labs(title="Temperature effect Filter = 15 year")
             ggarrange(a1,a, b1, b)
             
-             #ggsave("lowfreq_meanTlogGDP.png",dpi=600)
+             #ggsave("Estimates_meanTlogGDP.png",dpi=600)
         # Socioeconomic characteristics across categories (end)
     ## 3.5. Mean effect accross filters and socioeconomic variables; Supp Fig 1 and 2 (end)
 
@@ -1460,11 +1703,15 @@
                         #fmod_fft$absestimate <- abs(fmod_fft$Estimate)
                         fmod_fft$lowsignificant <- 0
                         fmod_fft$unfilteredsignificant <- 0
+                        fmod_fft$signlofreq <- 0
+                        fmod_fft$signunfilt <- 0
                                         
                         uncertain <- c(which(fmod_fft$high95>0 & fmod_fft$low95 <0))
+                        `%notin%` <- Negate(`%in%`)
                         fmod_fft$sign <- rep(0,dim(fmod_fft)[1])
                         
                         numcountries <- length(unique(fmod_fft$countrycode))
+                        glimpse(fmod_fft)
                         for (i in 1:numcountries){
                             if(is.null(fmod_fft$Estimate[1+5*(i-1)] )){next}
                             if(!is.na(fmod_fft$Estimate[5+5*(i-1)])){
@@ -1476,6 +1723,8 @@
                                 }else if(!is.na(fmod_fft$Estimate[2+5*(i-1)])){
                                     lastfreq <- 2
                                 }else{next}
+                            if(fmod_fft$Estimate[lastfreq+5*(i-1)] >0){fmod_fft$signlofreq[(1+5*(i-1)):(5+5*(i-1))]=1}
+                            if(fmod_fft$Estimate[1+5*(i-1)] >0){fmod_fft$signunfilt[(1+5*(i-1)):(5+5*(i-1))]=1}
                             m <- fmod_fft$Estimate[1+5*(i-1)] * fmod_fft$Estimate[lastfreq+5*(i-1)]
                             if (is.na(m)){next}
                             if(m>0 ){
@@ -1487,6 +1736,7 @@
                             converging <- 0
                             intensifying <- 0
                             intensifying_stat <- 0
+                            gray_area <- 0
                             for (i in 1:numcountries){
                                 if(!is.na(fmod_fft$Estimate[5+5*(i-1)])){
                                         lastfreq <- 5
@@ -1504,10 +1754,13 @@
                                 conf95 <-  (var^0.5)*1.65 #one-tail  95%
                                 
                                 if(abs(fmod_fft$Estimate[lastfreq+5*(i-1)]) > abs(fmod_fft$Estimate[1+5*(i-1)])){
-                                    intensifying <- c(intensifying,(1+5*(i-1)):(5+5*(i-1))) 
+                                    
+                                    if(fmod_fft$sign[2+5*(i-1)]==0){gray_area <- c(gray_area,(1+5*(i-1)):(5+5*(i-1))) }else{
+                                            intensifying <- c(intensifying,(1+5*(i-1)):(5+5*(i-1)))
+                                    
                                     if(theta+conf95 < 0 ){
                                         intensifying_stat <- c(intensifying_stat,(1+5*(i-1)):(5+5*(i-1))) 
-                                    }
+                                    }}
                                 }
                                 
                                 if(abs(fmod_fft$Estimate[lastfreq+5*(i-1)]) <= abs(fmod_fft$Estimate[1+5*(i-1)])){
@@ -1537,11 +1790,14 @@
                             fmod_fft$category[intensifying] <- "intensifying"
                             fmod_fft$category[converging_stat] <- "converging_stat"
                             fmod_fft$category[intensifying_stat] <- "intensifying_stat"
+                            fmod_fft$category[gray_area] <- "gray_area"
+
                             table(fmod_fft$category)/5
                             
                             fmod_fft$Category <- "Undefined"
                             fmod_fft$Category[converging] <- "converging"
                             fmod_fft$Category[intensifying] <- "intensifying"
+                            
                             table(fmod_fft$Category)/5
                             
                             fmod_fft$CoeffDifferents <- 0
@@ -1550,11 +1806,13 @@
                             table(fmod_fft$CoeffDifferents)/5
                             
                             table(fmod_fft$lowsignificant)/5
+                            table(fmod_fft$unfilteredsignificant)/5
 
                             fmod_fft_na<-fmod_fft[fmod_fft$category=="Undefined" | 
                                 fmod_fft$countrycode %notin% fmod_fft$countrycode[which(fmod_fft$Estimate<quantile(fmod_fft$Estimate, na.rm=TRUE,0.01))] |
                                 fmod_fft$countrycode %notin% fmod_fft$countrycode[which(fmod_fft$Estimate>quantile(fmod_fft$Estimate, na.rm=TRUE,0.99))],]
                             fmod_fft<-fmod_fft[fmod_fft$category!="Undefined",]
+                            library('rnaturalearth')
                             world <- ne_countries(scale = "medium", returnclass = "sf")
 
                             
@@ -1570,6 +1828,8 @@
                             #factor(fmod_fft$category)
                             fmod_fft$category <- factor(fmod_fft$category, levels = c("intensifying_stat", "intensifying", "converging","converging_stat"))
                             df1 <- fmod_fft[which(fmod_fft$econdata=="barro" &fmod_fft$climdata=="UDel" & fmod_fft$filter=="Unfiltered"),]
+                            pal1 <- sequential_hcl(7, palette = "Oranges")
+                            pal2 <- sequential_hcl(7, palette = "Teal")
                             df1$unfilteredsignificant <- factor(df1$unfilteredsignificant)
                             df1$lowsignificant <- factor(df1$lowsignificant)
                                 
@@ -1580,7 +1840,8 @@
                                 stat='count')+ scale_fill_manual(values = c(pal1[1],pal1[3],pal2[3]), 
                                 name="",labels=c("*Intensifying","Intensifying","Converging"))+ #No converging statistically significant found
                                 scale_x_discrete(name="",
-                                    labels=c(expression(paste("|",theta[f],"| =0",sep="")),expression(paste("|",theta[f],"| >0",sep=""))))+
+                                    labels=c(expression(paste("|",theta[f],"| =0",sep="")),
+                                    expression(paste("|",theta[f],"| >0",sep=""))))+
                                 scale_y_continuous(name="Number of countries")+theme(legend.position="none")
 
                             df2 <- fmod_fft[which(fmod_fft$econdata=="barro" &fmod_fft$climdata=="UDel" & fmod_fft$filter=="Unfiltered" & fmod_fft$unfilteredsignificant==1),]
@@ -1592,12 +1853,13 @@
                                 #name="",labels=c("*Intensifying","Intensifying","Converging","*Converging"))+
                                 scale_fill_manual(values = c(pal1[1],pal1[3],pal2[3]), 
                                 name="",labels=c("*Intensifying","Intensifying","Converging"))+ #No converging statistically significant found
-                                scale_x_discrete(name="",labels=c(expression(paste("|",beta[U],"| >0",sep=""))))+
+                                scale_x_discrete(name="",labels=c(expression(paste("|",theta[U],"| >0",sep=""))))+
                                 scale_y_continuous(name="Number of countries") + theme(legend.position="none")
                             
                             plot_fg <- ggplot(data=fmod_fft,aes(x=filters,y=Estimate*100, group = countrycode,color=factor(category)))+
                                 geom_line()+
-                                scale_colour_manual(name="Categories", values=c(pal1[1],pal1[3],pal2[3],pal2[1]),labels=c("Converging","Intensifying","Statistically Intensifying","Statistically Converging")) +
+                                scale_colour_manual(name="Categories", values=c(pal1[1],pal1[3],pal2[3],pal2[1]),
+                                labels=c("Converging","Intensifying","Statistically Intensifying","Statistically Converging")) +
                                 theme_bw() + xlab("Minimum Periodicity after Filtering")+
                                 geom_hline(yintercept=0,lty=2)+
                                 #geom_dl(data=fg,aes(label = countrycode), method = list(dl.combine("last.points")), cex = 0.9)+
@@ -1610,14 +1872,20 @@
                                 #panel.background = element_blank()) +
                                 ggtitle("")
                                 plot_fg      
+
+                            table(fmod_fft$sign)/5
+                            table(fmod_fft$sign)/5
+                            table(fmod_fft$category[fmod_fft$sign==1])/5
+                            table(fmod_fft$category[fmod_fft$sign==0])/5
+                            table(fmod_fft$unfilteredsignificant[fmod_fft$sign==0])/5
                             
-                            
-                            plot_categoriescolors <- ggplot() + geom_histogram(data=data.frame(x=c("*Intensifying","Intensifying","Converging","*Converging")), na.rm= TRUE, mapping = aes(x=x, fill=factor(x)),stat='count')+ 
-                            scale_fill_manual(values = c(pal1[1],pal1[3],pal2[3],pal2[1]),name="",labels=c("*Intensifying","Intensifying","Converging","*Converging"))
+                            plot_categoriescolors <- ggplot() + geom_histogram(data=data.frame(x=c("*Intensifying","Intensifying","Converging","*Converging","Unclassified")), na.rm= TRUE, mapping = aes(x=x, fill=factor(x)),stat='count')+ 
+                            scale_fill_manual(values = c(pal1[1],pal1[3],pal2[3],pal2[1],"dimgray"),name="",labels=c("*Intensifying","Intensifying","Converging","*Converging","Unclassified"))
                             leg_cat <- get_legend(plot_categoriescolors)                    
                             
                             fig_3 <- ggarrange(plot_fg,ggarrange(hist_bu,leg_cat,hist_bf,ncol=3,nrow=1),ncol=1,nrow=2)    
                             fig_3
+                            e_barro <- fmod_fft
                             #ggsave("Fig3_barro.png",dpi=600)
                                     
                     # Categorizing statistically different estimates (end)
@@ -1630,8 +1898,13 @@
                                         destination = "continent")
                 fmod_fft$invse <- 1/fmod_fft$StandardError
                 fmod_fft <- fmod_fft[!is.na(fmod_fft$invse),]
-                felm_3 <- felm(absestimate ~ factor(frequencies)|0|0|continent, data = fmod_fft,weights = fmod_fft$invse)
-                felm_4 <- felm(absestimate ~ factor(frequencies)|0|0|continent, data = fmod_fft)
+                f_unfiltpos <- fmod_fft[fmod_fft$signunfilt==1,]
+                f_unfiltneg <- fmod_fft[fmod_fft$signunfilt==0,]
+                felm_3 <- felm(Estimate ~ factor(frequencies)|0|0|continent, data =f_unfiltpos,weights = f_unfiltpos$invse)
+                felm_4 <- felm(Estimate ~ factor(frequencies)|0|0|continent, data =f_unfiltneg,weights = f_unfiltneg$invse)
+        
+                #felm_3 <- felm(absestimate ~ factor(frequencies)|0|0|continent, data = fmod_fft,weights = fmod_fft$invse)
+                #felm_4 <- felm(absestimate ~ factor(frequencies)|0|0|continent, data = fmod_fft)
             ## 3.3. FELM abs estimate by filter - Table 1, columns 1 and 2 (end)
         # Barro  
 
@@ -1645,17 +1918,21 @@
                         #fmod_fft <- fullmods_filter
                         fmod_fft <- fmod_fft[fmod_fft$econdata=="mad",]
                         fmod_fft <- fmod_fft[fmod_fft$climdata=="UDel",]
-                        fmod_fft$high95 <- fmod_fft$Estimate + fmod_fft$StandardError*1.64
-                        fmod_fft$low95 <- fmod_fft$Estimate - fmod_fft$StandardError*1.64
+                        fmod_fft$high95 <- fmod_fft$Estimate + fmod_fft$StandardError*1.96
+                        fmod_fft$low95 <- fmod_fft$Estimate - fmod_fft$StandardError*1.96
                         numcountries <- length(unique(fmod_fft$countrycode))
                         #fmod_fft$absestimate <- abs(fmod_fft$Estimate)
                         fmod_fft$lowsignificant <- 0
                         fmod_fft$unfilteredsignificant <- 0
+                        fmod_fft$signlofreq <- 0
+                        fmod_fft$signunfilt <- 0
                                         
                         uncertain <- c(which(fmod_fft$high95>0 & fmod_fft$low95 <0))
+                        `%notin%` <- Negate(`%in%`)
                         fmod_fft$sign <- rep(0,dim(fmod_fft)[1])
                         
                         numcountries <- length(unique(fmod_fft$countrycode))
+                        glimpse(fmod_fft)
                         for (i in 1:numcountries){
                             if(is.null(fmod_fft$Estimate[1+5*(i-1)] )){next}
                             if(!is.na(fmod_fft$Estimate[5+5*(i-1)])){
@@ -1667,6 +1944,8 @@
                                 }else if(!is.na(fmod_fft$Estimate[2+5*(i-1)])){
                                     lastfreq <- 2
                                 }else{next}
+                            if(fmod_fft$Estimate[lastfreq+5*(i-1)] >0){fmod_fft$signlofreq[(1+5*(i-1)):(5+5*(i-1))]=1}
+                            if(fmod_fft$Estimate[1+5*(i-1)] >0){fmod_fft$signunfilt[(1+5*(i-1)):(5+5*(i-1))]=1}
                             m <- fmod_fft$Estimate[1+5*(i-1)] * fmod_fft$Estimate[lastfreq+5*(i-1)]
                             if (is.na(m)){next}
                             if(m>0 ){
@@ -1678,6 +1957,7 @@
                             converging <- 0
                             intensifying <- 0
                             intensifying_stat <- 0
+                            gray_area <- 0
                             for (i in 1:numcountries){
                                 if(!is.na(fmod_fft$Estimate[5+5*(i-1)])){
                                         lastfreq <- 5
@@ -1695,10 +1975,13 @@
                                 conf95 <-  (var^0.5)*1.65 #one-tail  95%
                                 
                                 if(abs(fmod_fft$Estimate[lastfreq+5*(i-1)]) > abs(fmod_fft$Estimate[1+5*(i-1)])){
-                                    intensifying <- c(intensifying,(1+5*(i-1)):(5+5*(i-1))) 
+                                    
+                                    if(fmod_fft$sign[2+5*(i-1)]==0){gray_area <- c(gray_area,(1+5*(i-1)):(5+5*(i-1))) }else{
+                                            intensifying <- c(intensifying,(1+5*(i-1)):(5+5*(i-1)))
+                                    
                                     if(theta+conf95 < 0 ){
                                         intensifying_stat <- c(intensifying_stat,(1+5*(i-1)):(5+5*(i-1))) 
-                                    }
+                                    }}
                                 }
                                 
                                 if(abs(fmod_fft$Estimate[lastfreq+5*(i-1)]) <= abs(fmod_fft$Estimate[1+5*(i-1)])){
@@ -1728,11 +2011,14 @@
                             fmod_fft$category[intensifying] <- "intensifying"
                             fmod_fft$category[converging_stat] <- "converging_stat"
                             fmod_fft$category[intensifying_stat] <- "intensifying_stat"
+                            fmod_fft$category[gray_area] <- "gray_area"
+
                             table(fmod_fft$category)/5
                             
                             fmod_fft$Category <- "Undefined"
                             fmod_fft$Category[converging] <- "converging"
                             fmod_fft$Category[intensifying] <- "intensifying"
+                            
                             table(fmod_fft$Category)/5
                             
                             fmod_fft$CoeffDifferents <- 0
@@ -1741,11 +2027,13 @@
                             table(fmod_fft$CoeffDifferents)/5
                             
                             table(fmod_fft$lowsignificant)/5
+                            table(fmod_fft$unfilteredsignificant)/5
 
                             fmod_fft_na<-fmod_fft[fmod_fft$category=="Undefined" | 
                                 fmod_fft$countrycode %notin% fmod_fft$countrycode[which(fmod_fft$Estimate<quantile(fmod_fft$Estimate, na.rm=TRUE,0.01))] |
                                 fmod_fft$countrycode %notin% fmod_fft$countrycode[which(fmod_fft$Estimate>quantile(fmod_fft$Estimate, na.rm=TRUE,0.99))],]
                             fmod_fft<-fmod_fft[fmod_fft$category!="Undefined",]
+                            library('rnaturalearth')
                             world <- ne_countries(scale = "medium", returnclass = "sf")
 
                             
@@ -1761,6 +2049,8 @@
                             #factor(fmod_fft$category)
                             fmod_fft$category <- factor(fmod_fft$category, levels = c("intensifying_stat", "intensifying", "converging","converging_stat"))
                             df1 <- fmod_fft[which(fmod_fft$econdata=="mad" &fmod_fft$climdata=="UDel" & fmod_fft$filter=="Unfiltered"),]
+                            pal1 <- sequential_hcl(7, palette = "Oranges")
+                            pal2 <- sequential_hcl(7, palette = "Teal")
                             df1$unfilteredsignificant <- factor(df1$unfilteredsignificant)
                             df1$lowsignificant <- factor(df1$lowsignificant)
                                 
@@ -1771,7 +2061,8 @@
                                 stat='count')+ scale_fill_manual(values = c(pal1[1],pal1[3],pal2[3]), 
                                 name="",labels=c("*Intensifying","Intensifying","Converging"))+ #No converging statistically significant found
                                 scale_x_discrete(name="",
-                                    labels=c(expression(paste("|",theta[f],"| =0",sep="")),expression(paste("|",theta[f],"| >0",sep=""))))+
+                                    labels=c(expression(paste("|",theta[f],"| =0",sep="")),
+                                    expression(paste("|",theta[f],"| >0",sep=""))))+
                                 scale_y_continuous(name="Number of countries")+theme(legend.position="none")
 
                             df2 <- fmod_fft[which(fmod_fft$econdata=="mad" &fmod_fft$climdata=="UDel" & fmod_fft$filter=="Unfiltered" & fmod_fft$unfilteredsignificant==1),]
@@ -1783,12 +2074,13 @@
                                 #name="",labels=c("*Intensifying","Intensifying","Converging","*Converging"))+
                                 scale_fill_manual(values = c(pal1[1],pal1[3],pal2[3]), 
                                 name="",labels=c("*Intensifying","Intensifying","Converging"))+ #No converging statistically significant found
-                                scale_x_discrete(name="",labels=c(expression(paste("|",beta[U],"| >0",sep=""))))+
+                                scale_x_discrete(name="",labels=c(expression(paste("|",theta[U],"| >0",sep=""))))+
                                 scale_y_continuous(name="Number of countries") + theme(legend.position="none")
                             
                             plot_fg <- ggplot(data=fmod_fft,aes(x=filters,y=Estimate*100, group = countrycode,color=factor(category)))+
                                 geom_line()+
-                                scale_colour_manual(name="Categories", values=c(pal1[1],pal1[3],pal2[3],pal2[1]),labels=c("Converging","Intensifying","Statistically Intensifying","Statistically Converging")) +
+                                scale_colour_manual(name="Categories", values=c(pal1[1],pal1[3],pal2[3],pal2[1]),
+                                labels=c("Converging","Intensifying","Statistically Intensifying","Statistically Converging")) +
                                 theme_bw() + xlab("Minimum Periodicity after Filtering")+
                                 geom_hline(yintercept=0,lty=2)+
                                 #geom_dl(data=fg,aes(label = countrycode), method = list(dl.combine("last.points")), cex = 0.9)+
@@ -1801,14 +2093,20 @@
                                 #panel.background = element_blank()) +
                                 ggtitle("")
                                 plot_fg      
+
+                            table(fmod_fft$sign)/5
+                            table(fmod_fft$sign)/5
+                            table(fmod_fft$category[fmod_fft$sign==1])/5
+                            table(fmod_fft$category[fmod_fft$sign==0])/5
+                            table(fmod_fft$unfilteredsignificant[fmod_fft$sign==0])/5
                             
-                            
-                            plot_categoriescolors <- ggplot() + geom_histogram(data=data.frame(x=c("*Intensifying","Intensifying","Converging","*Converging")), na.rm= TRUE, mapping = aes(x=x, fill=factor(x)),stat='count')+ 
-                            scale_fill_manual(values = c(pal1[1],pal1[3],pal2[3],pal2[1]),name="",labels=c("*Intensifying","Intensifying","Converging","*Converging"))
+                            plot_categoriescolors <- ggplot() + geom_histogram(data=data.frame(x=c("*Intensifying","Intensifying","Converging","*Converging","Unclassified")), na.rm= TRUE, mapping = aes(x=x, fill=factor(x)),stat='count')+ 
+                            scale_fill_manual(values = c(pal1[1],pal1[3],pal2[3],pal2[1],"dimgray"),name="",labels=c("*Intensifying","Intensifying","Converging","*Converging","Unclassified"))
                             leg_cat <- get_legend(plot_categoriescolors)                    
                             
                             fig_3 <- ggarrange(plot_fg,ggarrange(hist_bu,leg_cat,hist_bf,ncol=3,nrow=1),ncol=1,nrow=2)    
                             fig_3
+                            e_mad <- fmod_fft
                             #ggsave("Fig3_mad.png",dpi=600)
                                     
                     # Categorizing statistically different estimates (end)
@@ -1821,9 +2119,139 @@
                                         destination = "continent")
                 fmod_fft$invse <- 1/fmod_fft$StandardError
                 fmod_fft <- fmod_fft[!is.na(fmod_fft$invse),]
-                felm_5 <- felm(absestimate ~ factor(frequencies)|0|0|continent, data = fmod_fft,weights = fmod_fft$invse)
-                felm_6 <- felm(absestimate ~ factor(frequencies)|0|0|continent, data = fmod_fft)
-                #stargazer(felm_2,felm_1,felm_4,felm_3,felm_6,felm_5,type="html",out="Regression_on_estimates.html")
+                f_unfiltpos <- fmod_fft[fmod_fft$signunfilt==1,]
+                f_unfiltneg <- fmod_fft[fmod_fft$signunfilt==0,]
+                felm_5 <- felm(Estimate ~ factor(frequencies)|0|0|continent, data =f_unfiltpos,weights = f_unfiltpos$invse)
+                felm_6 <- felm(Estimate ~ factor(frequencies)|0|0|continent, data =f_unfiltneg,weights = f_unfiltneg$invse)
+                #felm_5 <- felm(absestimate ~ factor(frequencies)|0|0|continent, data = fmod_fft,weights = fmod_fft$invse)
+                #felm_6 <- felm(absestimate ~ factor(frequencies)|0|0|continent, data = fmod_fft)
+                stargazer(felm_2,felm_1,felm_4,felm_3,felm_6,felm_5,type="html",out="Regression_on_estimates_negpos.html")
+                
+                dataset <- data.frame(estimate=double(),cil=double(),cih=double(),filter=factor(),dataset=factor(),sign=factor())
+                felm_all <- felm(Estimate~signunfilt*factor(frequencies), data=fmod_fft)
+                stargazer(felm_all,type="text")
+                for(i in 1:3){
+                for (j in 1:2){    
+                    for (fi in 1:5){
+                    if(i==1){
+                        datasetname <- "World Bank"
+                        if(j==1){
+                            model <- felm_1
+                            sign <- factor("positive")
+                        } else {model <- felm_2
+                        sign <- factor("negative")}
+                    }
+                    if(i==2){
+                        datasetname <- "Barro-Ursua"
+                        if(j==1){
+                            model <- felm_3
+                            sign <- factor("positive")
+                        } else {model <- felm_4
+                        sign <- factor("negative")}
+                    }
+                    if(i==3){
+                        datasetname <- "Maddison"
+                        if(j==1){
+                            model <- felm_5
+                            sign <- factor("positive")
+                        } else {model <- felm_6
+                        sign <- factor("negative")}
+                    }
+                    Sigma <- vcov(model)
+                    coefT <- "(Intercept)"
+                    if(fi==1){
+                        sigma = Sigma[1,1]
+                        beta.hat <- coef(model)[1]
+                        xmat <-1
+                        gestimated <- colSums(beta.hat*t(xmat)) 
+                        cih <- gestimated + 1.96*sqrt(diag((xmat %*% sigma) %*% t(xmat)))
+                        cil <- gestimated -  1.96*sqrt(diag((xmat %*% sigma) %*% t(xmat)))
+                        Filter <- "Unfiltered"
+                    }else{
+                    if(fi==2){
+                        coefT5 <- "factor(frequencies)3"
+                        Filter <- "3-years"
+                    }
+                    if(fi==3){
+                        coefT5 <- "factor(frequencies)5"
+                        Filter <- "5-years"
+                    }
+                    if(fi==4){
+                        coefT5 <- "factor(frequencies)10"
+                        Filter <- "10-years"
+                    }
+                    if(fi==5){
+                        coefT5 <- "factor(frequencies)15"
+                        Filter <- "15-years"
+                    }
+                        start1 <- which(names(coef(model))==coefT)
+                        end1 <- which(names(coef(model))==coefT5)
+                        sigma = Sigma[c(start1,end1),c(start1,end1)]
+                        beta.hat <- coef(model)[c(start1,end1)]
+                        xmat <-cbind(1,1)
+                        gestimated <- colSums(beta.hat*t(xmat)) 
+                        cih <- gestimated + 1.96*sqrt(diag((xmat %*% sigma) %*% t(xmat)))
+                        cil <- gestimated -  1.96*sqrt(diag((xmat %*% sigma) %*% t(xmat)))
+                        }
+                        dataset <- rbind(dataset,data.frame(estimate=gestimated,cil=cil,cih=cih,filter=factor(Filter),dataset=factor(datasetname),sign=factor(sign)))
+                }
+                }    
+                }
+                #dataset$filter <- factor(dataset$filter, levels = c("Unfiltered", "5 years", "10 years", "15 years"))
+                
+                
+                cols <- c("#66c2a5","#fc8d62","#8da0cb")
+
+                a <- ggplot(dataset[which(dataset$dataset=='World Bank'),],aes(x=filter,y=estimate*100,fill=dataset,color=dataset,group=interaction(sign,dataset)))+
+                geom_line(color="#009E73")+theme_bw()+
+                geom_hline(yintercept=0)+
+                xlab("Filters")+ylab("Estimated pooled effect of \n 1 Degree Warming on Growth (pp)")+
+                #scale_colour_manual(labels = c("a","b","c"),values = c(cols[1],cols[2],cols[3]))+
+                geom_ribbon(aes(ymin=cih*100,ymax=cil*100),alpha=0.2,colour=NA,fill="#009E73")+
+                ggtitle("World Bank")+
+                ylim(-2.5,4.1)
+
+                b <- ggplot(dataset[which(dataset$dataset=='Barro-Ursua'),],aes(x=filter,y=estimate*100,fill=dataset,color=dataset,group=interaction(sign,dataset)))+
+                geom_line(color="#E69F00")+theme_bw()+
+                geom_hline(yintercept=0)+
+                xlab("Filters")+ylab("")+
+                #scale_colour_manual(labels = c("a","b","c"),values = c(cols[1],cols[2],cols[3]))+
+                geom_ribbon(aes(ymin=cih*100,ymax=cil*100),alpha=0.2,colour=NA,fill="#E69F00")+
+                ggtitle("Barro Ursua")+
+                ylim(-2.5,4.1)
+                
+                c <- ggplot(dataset[which(dataset$dataset=='Maddison'),],aes(x=filter,y=estimate*100,fill=dataset,color=dataset,group=interaction(sign,dataset)))+
+                geom_line(color="#CC79A7")+theme_bw()+
+                geom_hline(yintercept=0)+
+                xlab("Filters")+ylab("")+
+                #scale_colour_manual(labels = c("a","b","c"),values = c(cols[1],cols[2],cols[3]))+
+                geom_ribbon(aes(ymin=cih*100,ymax=cil*100),alpha=0.2,colour=NA,fill="#CC79A7")+
+                ggtitle("Maddison")+
+                ylim(-2.5,4.1)
+
+                ggarrange(a,b,c,ncol=3,nrow=1)
+                #ggsave("Fig4_PooledEffect.png")
+
+                #e_wb <- e_wb[which(e_wb$lowsignificant==1),]
+                #table(e_wb$sign)
+                
+                #e_barro <- new_fft[new_fft$econdata=="barro",]
+                #e_mad <- new_fft[new_fft$econdata=="mad",]
+
+                #est <- merge(e_wb,e_barro, by=c("countrycode","frequencies"))
+                #est <- est[which(est$Estimate.x>quantile(est$Estimate.x, na.rm=TRUE,0.01)),] 
+                #est <- est[which(est$Estimate.x<quantile(est$Estimate.x, na.rm=TRUE,0.99)),] 
+                #est <- est[which(est$Estimate.y>quantile(est$Estimate.y, na.rm=TRUE,0.01)),] 
+                #est <- est[which(est$Estimate.y<quantile(est$Estimate.y, na.rm=TRUE,0.99)),] 
+                    
+                #ggplot(est, aes(x=Estimate.x,y=Estimate.y,color=factor(frequencies)))+
+                #geom_point()+
+                #facet_wrap(~frequencies)+
+                #xlim(-0.25,0.25)+ylim(-0.25,0.25)
+                #xlab("WB Estimates") + ylab("Maddison Estimates")
+
+                #summary(lm(Estimate.x~0+Estimate.y,data=est))
+            
             ## 3.3. FELM abs estimate by filter - Table 1, columns 1 and 2 (end)
         # Maddison
     ## 3.5. Other datasets - Table 1, columns 3 to 6; Supp Fig 3 (end)
